@@ -15,6 +15,10 @@ namespace banggame {
             return effect_heal{ncubes + amount}.on_prompt(origin_card, origin);
         }
 
+        int evaluate(card_ptr origin_card, player_ptr origin, int ncubes) const {
+            return effect_heal{ncubes + amount}.evaluate(origin_card, origin);
+        }
+
         void on_play(card_ptr origin_card, player_ptr origin, int ncubes) const {
             effect_heal{ncubes + amount}.on_play(origin_card, origin);
         }

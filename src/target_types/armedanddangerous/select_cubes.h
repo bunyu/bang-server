@@ -21,13 +21,9 @@ namespace banggame {
             return static_cast<const targeting_select_cubes_args &>(*this);
         }
 
-        auto get_all_cubes(player_ptr origin) const {
-            return cube_slots(origin) | rv::for_each([](card_ptr slot) {
-                return rv::repeat(slot, slot->num_cubes());
-            });
-        }
+        card_list get_all_cubes(player_ptr origin, const effect_context &ctx, bool safe_bomb = false) const;
         
-        std::generator<card_list> possible_targets(card_ptr origin_card, player_ptr origin, const effect_holder &effect, const effect_context &ctx) const;
+        bool is_possible(card_ptr origin_card, player_ptr origin, const effect_holder &effect, const effect_context &ctx) const;
         scored_target<card_list> random_target(card_ptr origin_card, player_ptr origin, const effect_holder &effect, const effect_context &ctx) const;
         game_string get_error(card_ptr origin_card, player_ptr origin, const effect_holder &effect, const effect_context &ctx, const card_list &target) const;
         prompt_string on_prompt(card_ptr origin_card, player_ptr origin, const effect_holder &effect, const effect_context &ctx, const card_list &target) const;

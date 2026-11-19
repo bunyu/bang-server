@@ -7,8 +7,10 @@
 namespace banggame {
 
     scored_target<card_list> targeting_select_cubes_repeat::random_target(card_ptr origin_card, player_ptr origin, const effect_holder &effect, const effect_context &ctx) const {
+        auto all_cubes = get_all_cubes(origin, ctx, true);
+
         auto [num_repeats, score] = random_max_element(
-            rn::iota_view{0, count_cubes(origin) / ncubes + 1},
+            rn::iota_view{0, static_cast<int>(all_cubes.size()) / ncubes + 1},
             [&](int n) {
                 if (effect.on_prompt(origin_card, origin, n, {}, ctx)) return -2;
                 return effect.evaluate(origin_card, origin, n, ctx);
@@ -16,7 +18,7 @@ namespace banggame {
             origin->m_game->bot_rng
         );
 
-        auto selected_cubes = sample_elements(get_all_cubes(origin), ncubes * num_repeats, origin->m_game->bot_rng);
+        auto selected_cubes = sample_elements(all_cubes, ncubes * num_repeats, origin->m_game->bot_rng);
         
         if (effect.on_prompt(origin_card, origin, {}, ctx)) score -= 2;
         else score += effect.evaluate(origin_card, origin, ctx);

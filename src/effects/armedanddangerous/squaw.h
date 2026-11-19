@@ -5,6 +5,12 @@
 
 namespace banggame {
 
+    struct effect_squaw_pay {
+        void add_context(card_ptr origin_card, player_ptr origin, int ncubes, effect_context &ctx) const;
+    };
+
+    DEFINE_EFFECT(squaw_pay, effect_squaw_pay)
+
     struct effect_squaw {
         game_string get_error(card_ptr origin_card, player_ptr origin, card_ptr discarded_card, const effect_context &ctx) const;
         prompt_string on_prompt(card_ptr origin_card, player_ptr origin, card_ptr discarded_card, effect_flags flags, const effect_context &ctx) const;

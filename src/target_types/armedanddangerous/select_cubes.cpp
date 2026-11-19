@@ -12,7 +12,7 @@ namespace banggame {
         return utils::combinations(rn::to<card_list>(get_all_cubes(origin)), ncubes);
     }
 
-    card_list targeting_select_cubes::random_target(card_ptr origin_card, player_ptr origin, const effect_holder &effect, const effect_context &ctx) const {
+    scored_target<card_list> targeting_select_cubes::random_target(card_ptr origin_card, player_ptr origin, const effect_holder &effect, const effect_context &ctx) const {
         return sample_elements(get_all_cubes(origin), ncubes, origin->m_game->bot_rng);
     }
 
@@ -25,15 +25,19 @@ namespace banggame {
                 return {"ERROR_TARGET_NOT_SELF", origin_card};
             }
         }
-        return {};
+        return effect.get_error(origin_card, origin, target_cards.size() / ncubes, ctx);
     }
 
     prompt_string targeting_select_cubes::on_prompt(card_ptr origin_card, player_ptr origin, const effect_holder &effect, const effect_context &ctx, const card_list &target_cards) const {
-        return origin->m_game->call_event(event_type::get_select_cubes_prompt{ origin, ctx });
+        MAYBE_RETURN(origin->m_game->call_event(event_type::get_select_cubes_prompt{ origin, ctx }));
+        return effect.on_prompt(origin_card, origin, target_cards.size() / ncubes, {}, ctx);
     }
 
     void targeting_select_cubes::add_context(card_ptr origin_card, player_ptr origin, const effect_holder &effect, effect_context &ctx, const card_list &target_cards) const {
-        ctx.add(contexts::selected_cubes{ origin_card, target_cards });
+        for (card_ptr target_card : target_cards) {
+            ctx.add(contexts::selected_cube{ target_card });
+        }
+        effect.add_context(origin_card, origin, target_cards.size() / ncubes, ctx);
     }
 
     void targeting_select_cubes::on_play(card_ptr origin_card, player_ptr origin, const effect_holder &effect, const effect_context &ctx, const card_list &target_cards) const {
@@ -52,6 +56,8 @@ namespace banggame {
         for (const auto &[cube, ncubes] : card_cube_count) {
             cube->move_cubes(nullptr, ncubes);
         }
+
+        effect.on_play(origin_card, origin, target_cards.size() / ncubes, {}, ctx);
     }
 
 }

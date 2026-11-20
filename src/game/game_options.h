@@ -28,8 +28,8 @@ namespace banggame {
         game_duration auto_resolve_timer = 1000ms;
         game_duration damage_timer = 1500ms;
         game_duration escape_timer = 3000ms;
-        game_duration bot_play_timer = 500ms;
-        float duration_coefficient = 1.f;
+        game_duration bot_play_timer = 900ms;
+        float duration_coefficient = 1.3f;
         unsigned int game_seed = 0;
         unsigned int bot_rng_seed = 0;
 

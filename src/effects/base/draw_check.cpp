@@ -97,7 +97,19 @@ namespace banggame {
     void request_check_base::resolve() {
         pop_request();
         modified_sign sign = get_modified_sign(drawn_card);
-        bool lucky = do_get_result(sign).lucky;
+        draw_check_result result = do_get_result(sign);
+        bool lucky = result.lucky;
+
+        // Tell clients the outcome of the "draw!" so they can show it, and give everyone a moment to see it.
+        if (!result.indifferent) {
+            if (lucky) {
+                target->m_game->add_log("LOG_CHECK_LUCKY", origin_card, target, drawn_card);
+            } else {
+                target->m_game->add_log("LOG_CHECK_UNLUCKY", origin_card, target, drawn_card);
+            }
+            drawn_card->add_short_pause();
+        }
+
         target->m_game->call_event(event_type::on_draw_check_luck{ target, lucky });
         if (!target->m_game->m_selection.empty()) {
             while (!target->m_game->m_selection.empty()) {

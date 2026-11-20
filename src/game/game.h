@@ -15,6 +15,13 @@ namespace banggame {
 
         game_tracking m_tracking;
 
+        // user id of the lobby owner (set before start_game), for the owner_role option
+        int m_owner_user_id = 0;
+        void set_owner_user_id(int user_id) override { m_owner_user_id = user_id; }
+
+        ticks get_inactivity_timeout() const override;
+        request_state on_inactivity() override;
+
         game_report get_game_report() const override {
             return m_tracking.get_game_report(this);
         }

@@ -64,6 +64,8 @@ namespace banggame {
         virtual void handle_game_action(int user_id, const json::json &action) = 0;
         virtual void rejoin_user(int old_user_id, int new_user_id) = 0;
         virtual void start_game(std::span<int> user_ids) = 0;
+        // lobby owner (for the owner_role option), set before start_game
+        virtual void set_owner_user_id(int user_id) {}
         virtual bool is_game_over() const = 0;
         virtual void get_game_commands(bool enable_cheats, consumer_callback<chat_command> callback) const = 0;
         virtual game_report get_game_report() const = 0;

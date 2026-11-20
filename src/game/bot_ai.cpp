@@ -108,6 +108,17 @@ namespace banggame {
             });
         }
 
+        // Easier bots: on some decisions (easy 55%, normal 25%), ignore the strategy and pick at random among
+        // the possible actions (including doing nothing, when allowed).
+        static constexpr int mistake_percent[] = { 55, 25, 0 };
+        const bool careless = static_cast<int>(rng() % 100) < mistake_percent[std::clamp(origin->m_game->m_options.bot_difficulty, 0, 2)];
+        if (careless) {
+            for (candidate &c : candidates) {
+                c.priority = 0;
+                c.score = 0;
+            }
+        }
+
         // doing nothing is worth 0: it is preferred to every harmful action
         if (add_empty) {
             candidates.push_back(candidate {

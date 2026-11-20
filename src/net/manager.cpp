@@ -568,6 +568,11 @@ void game_manager::handle_message(client_messages::game_start &&args, session_pt
 
     auto guard = logging::push_context(std::format("game {}", lobby.name));
     lobby.m_game = std::make_unique<banggame::game>(lobby.options);
+    for (const game_user &user : lobby.connected_users()) {
+        if (user.is_lobby_owner()) {
+            lobby.m_game->set_owner_user_id(user.user_id);
+        }
+    }
 
     lobby.m_game->get_game_commands(m_options.enable_cheats, [&](chat_command command) {
         lobby.add_command(std::move(command), command_permissions::lobby_in_game);

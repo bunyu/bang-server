@@ -74,6 +74,8 @@ namespace banggame {
     private:
         utils::stable_priority_queue<std::shared_ptr<request_base>, request_priority_ordering> m_requests;
         request_state m_state;
+        // how long the game has been waiting for a human (for the inactivity timer)
+        ticks m_idle_ticks{0};
 
         request_state invoke_update();
         request_state invoke_tick_update();
@@ -85,6 +87,9 @@ namespace banggame {
         virtual void send_request_status_clear() = 0;
         virtual request_state send_request_status_ready() = 0;
         virtual request_state request_bot_play(player_ptr origin, bool instant) = 0;
+        // inactivity timer: 0 = off; on_inactivity() makes a move for whoever the game is waiting for
+        virtual ticks get_inactivity_timeout() const { return ticks{0}; }
+        virtual request_state on_inactivity() { return request_states::done{}; }
 
     public:
         void tick();

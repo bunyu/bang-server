@@ -32,6 +32,12 @@ namespace banggame {
         float duration_coefficient = 1.3f;
         unsigned int game_seed = 0;
         unsigned int bot_rng_seed = 0;
+        // bots: 0 = easy, 1 = normal, 2 = hard (the full AI)
+        int bot_difficulty = 2;
+        // role for the lobby owner: 0 = random, 1 = sheriff, 2 = deputy, 3 = outlaw, 4 = renegade
+        int owner_role = 0;
+        // a human player who does nothing for this long has their move made automatically (0 = never)
+        game_duration inactivity_timer = 0ms;
 
         static game_options deserialize_json(const json::json &value);
 

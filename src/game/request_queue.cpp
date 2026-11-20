@@ -70,6 +70,18 @@ namespace banggame {
     void request_queue::tick() {
         m_state = invoke_tick_update();
 
+        // Nobody has moved for too long (and nothing else is going on): play for the player the game waits for.
+        if (std::holds_alternative<request_states::done>(m_state) && !is_game_over()) {
+            ticks timeout = get_inactivity_timeout();
+            if (timeout > ticks{0}) {
+                m_idle_ticks += ticks{1};
+                if (m_idle_ticks >= timeout) {
+                    m_idle_ticks = ticks{0};
+                    m_state = on_inactivity();
+                }
+            }
+        }
+
         if (std::holds_alternative<request_states::next>(m_state)) {
             commit_updates();
         }
@@ -79,6 +91,7 @@ namespace banggame {
     static constexpr int max_update_count = 30;
     
     void request_queue::commit_updates() {
+        m_idle_ticks = ticks{0};
         int count = 0;
         do {
             auto timer = get_total_update_time();

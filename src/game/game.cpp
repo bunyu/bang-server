@@ -462,6 +462,24 @@ namespace banggame {
         auto role_ptr = m_players.size() > 3 ? roles : roles_3players;
 
         rn::shuffle(role_ptr, role_ptr + m_players.size(), rng);
+
+        // owner_role option: give the lobby owner the chosen role by swapping with whoever was dealt it
+        if (m_options.owner_role > 0) {
+            player_role wanted = m_players.size() > 3
+                ? std::array{ player_role::sheriff, player_role::deputy, player_role::outlaw, player_role::renegade }[m_options.owner_role - 1]
+                : std::array{ player_role::unknown, player_role::deputy_3p, player_role::outlaw_3p, player_role::renegade_3p }[m_options.owner_role - 1];
+            auto owner_it = rn::find(m_players, m_owner_user_id, &player::user_id);
+            if (wanted != player_role::unknown && owner_it != m_players.end()) {
+                size_t owner_index = owner_it - m_players.begin();
+                for (size_t i = 0; i < m_players.size(); ++i) {
+                    if (role_ptr[i] == wanted) {
+                        std::swap(role_ptr[i], role_ptr[owner_index]);
+                        break;
+                    }
+                }
+            }
+        }
+
         for (player_ptr p : m_players) {
             p->set_role(*role_ptr++, true);
         }
@@ -504,22 +522,18 @@ namespace banggame {
         add_update(make_preload_assets_update(this));
 
         if (!call_event(event_type::on_assign_characters{ m_first_player })) {
-            if (m_options.all_characters) {
-                add_cards_to(m_characters, pocket_type::selection, nullptr, card_visibility::shown);
-                for (player_ptr p : range_alive_players(m_first_player)) {
-                    queue_request<request_characterchoice>(p);
-                }
-                queue_action([this]{
-                    remove_cards(m_selection);
-                }, 190);
-            } else {
+            {
+                // "All characters": every player gets an equal share of all the characters (characters / players)
+                // to choose from, instead of everyone picking in turn from one shared pool.
                 auto character_it = m_characters.begin();
                 int max_character_choice = m_characters.size() / num_alive();
+                int choice = m_options.all_characters ? max_character_choice : m_options.character_choice;
                 for (player_ptr p : range_alive_players(m_first_player)) {
-                    if (m_options.character_choice > 1) {
+                    if (choice > 1) {
                         card_list characters;
-                        characters.reserve(std::min(max_character_choice, m_options.character_choice));
-                        for (int i=0; i<characters.capacity(); ++i) {
+                        const int count = std::min(max_character_choice, choice);
+                        characters.reserve(count);
+                        for (int i=0; i<count; ++i) {
                             characters.push_back(*character_it++);
                         }
 
@@ -563,6 +577,33 @@ namespace banggame {
         });
 
         commit_updates();
+    }
+
+    ticks game::get_inactivity_timeout() const {
+        return std::chrono::duration_cast<ticks>(m_options.inactivity_timer);
+    }
+
+    // The inactivity timer ran out: let the bot AI make the move for the human the game is waiting for
+    // (the target of the pending request, any human who can answer it, or the player whose turn it is).
+    request_state game::on_inactivity() {
+        auto try_play = [&](player_ptr p) -> std::optional<request_state> {
+            if (!p || p->is_bot() || !p->alive()) return std::nullopt;
+            request_state state = request_bot_play(p, true);
+            if (std::holds_alternative<request_states::next>(state)) {
+                add_log("LOG_PLAYER_INACTIVE", p);
+                return state;
+            }
+            return std::nullopt;
+        };
+        if (auto req = top_request()) {
+            if (auto state = try_play(req->target)) return *state;
+            for (player_ptr p : m_players) {
+                if (auto state = try_play(p)) return *state;
+            }
+        } else if (auto state = try_play(m_playing)) {
+            return *state;
+        }
+        return request_states::done{};
     }
 
     request_state game::send_request_status_ready() {

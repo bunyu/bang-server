@@ -5,7 +5,7 @@
 
 #include "game/prompts.h"
 
-#include "select_cubes_optional.h"
+#include "select_cubes_repeat.h"
 
 namespace banggame {
 
@@ -16,11 +16,11 @@ namespace banggame {
             player_ptr player;
         };
 
-        targeting_select_cubes_optional target_cubes;
+        targeting_select_cubes_repeat target_cubes;
         targeting_player target_player;
 
         targeting_select_cubes_player(target_args::player args, int ncubes)
-            : target_cubes{{}, ncubes}
+            : target_cubes{{}, ncubes, 1}
             , target_player{args} {}
         
         auto get_args() const {

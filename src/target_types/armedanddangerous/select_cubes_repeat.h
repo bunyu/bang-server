@@ -8,7 +8,19 @@
 namespace banggame {
 
     struct targeting_select_cubes_repeat : targeting_select_cubes {
-        using targeting_select_cubes::targeting_select_cubes;
+        int max_repeats;
+
+        targeting_select_cubes_repeat(target_args::empty args, int ncubes, int max_repeats = 0)
+            : targeting_select_cubes{args, ncubes}
+            , max_repeats{max_repeats} {}
+
+        auto get_args() const {
+            struct args {
+                int ncubes;
+                int max_repeats;
+            };
+            return args{ ncubes, max_repeats };
+        }
         
         bool is_possible(card_ptr origin_card, player_ptr origin, const effect_holder &effect, const effect_context &ctx) const {
             return true;

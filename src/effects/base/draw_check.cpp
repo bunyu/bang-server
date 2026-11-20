@@ -64,6 +64,8 @@ namespace banggame {
         drawn_card = target_card;
 
         target->m_game->add_log("LOG_CHECK_DREW_CARD", origin_card, target, target_card);
+        // Pause on the drawn card so every client (and the bots) can see it. Counted in the request timers.
+        target->m_game->add_update(game_updates::short_pause{ target_card, durations.check_reveal });
         if (!target->m_game->call_event(event_type::on_draw_check_select{ target, shared_from_this() })) {
             resolve();
         }
@@ -107,7 +109,7 @@ namespace banggame {
             } else {
                 target->m_game->add_log("LOG_CHECK_UNLUCKY", origin_card, target, drawn_card);
             }
-            drawn_card->add_short_pause();
+            target->m_game->add_update(game_updates::short_pause{ drawn_card, durations.check_result });
         }
 
         target->m_game->call_event(event_type::on_draw_check_luck{ target, lucky });

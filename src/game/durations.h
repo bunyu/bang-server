@@ -31,6 +31,8 @@ namespace banggame {
         animation_duration move_player;
         animation_duration player_hp;
         animation_duration move_train;
+        animation_duration check_reveal;
+        animation_duration check_result;
     } durations;
 
 }

@@ -17,6 +17,9 @@ namespace banggame {
         .move_player =     1000ms,
         .player_hp =       333ms,
         .move_train =      500ms,
+        // "draw!" checks: time to look at the drawn card, then at the result
+        .check_reveal =    900ms,
+        .check_result =    1200ms,
     };
 
 }

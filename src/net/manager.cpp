@@ -271,11 +271,21 @@ void game_manager::handle_message(client_messages::lobby_game_options &&args, se
     }
 
     if (lobby.state != lobby_state::waiting) {
-        throw lobby_error("ERROR_LOBBY_NOT_WAITING");
+        // During a game only the pace can change: the running game reads these through its reference to lobby.options,
+        // so they apply from the next animation / timer on.
+        if (!lobby.m_game) {
+            throw lobby_error("ERROR_LOBBY_NOT_WAITING");
+        }
+        lobby.options.duration_coefficient = args.options.duration_coefficient;
+        lobby.options.bot_play_timer = args.options.bot_play_timer;
+        lobby.options.inactivity_timer = args.options.inactivity_timer;
+        lobby.options.auto_resolve_timer = args.options.auto_resolve_timer;
+        lobby.broadcast_message(server_messages::lobby_game_options{ lobby.options });
+        return;
     }
 
     lobby.options = args.options;
-    
+
     for (const game_user &user : lobby.connected_users()) {
         if (user.session != session) {
             send_message(user.session->client, server_messages::lobby_game_options{ args.options });

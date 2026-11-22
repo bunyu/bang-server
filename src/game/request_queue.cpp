@@ -82,6 +82,20 @@ namespace banggame {
             }
         }
 
+        // The game waits for a human whose connection is gone: the bot AI plays for them at the bot pace.
+        if (std::holds_alternative<request_states::done>(m_state) && !is_game_over()) {
+            ticks timeout = get_offline_timeout();
+            if (timeout > ticks{0}) {
+                m_offline_ticks += ticks{1};
+                if (m_offline_ticks >= timeout) {
+                    m_offline_ticks = ticks{0};
+                    m_state = on_offline();
+                }
+            } else {
+                m_offline_ticks = ticks{0};
+            }
+        }
+
         if (std::holds_alternative<request_states::next>(m_state)) {
             commit_updates();
         }
@@ -92,6 +106,7 @@ namespace banggame {
     
     void request_queue::commit_updates() {
         m_idle_ticks = ticks{0};
+        m_offline_ticks = ticks{0};
         int count = 0;
         do {
             auto timer = get_total_update_time();

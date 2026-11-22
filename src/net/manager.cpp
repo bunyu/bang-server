@@ -82,6 +82,14 @@ void game_manager::tick() {
     if (std::erase_if(m_sessions, [&](auto &pair) {
         session_ptr session = pair.second;
         if (session->client.expired()) {
+            // A player of a running game keeps the seat until the game ends (the bot AI plays for them meanwhile),
+            // so reconnecting with the same session id returns to the game.
+            if (game_lobby *lobby = session->lobby; lobby && lobby->state == lobby_state::playing && lobby->m_game
+                && !lobby->m_game->is_game_over() && lobby->m_game->contains_user(lobby->find_user(session).user_id))
+            {
+                session->lifetime = options().user_lifetime;
+                return false;
+            }
             if (--session->lifetime <= ticks{0}) {
                 if (session->lobby) {
                     kick_user_from_lobby(session);
@@ -102,6 +110,13 @@ void game_manager::tick() {
             try {
                 {
                     auto guard = logging::push_context(std::format("game {}", lobby.name));
+                    std::vector<int> offline_users;
+                    for (const game_user &user : lobby.users) {
+                        if (user.is_disconnected() || user.session->client.expired()) {
+                            offline_users.push_back(user.user_id);
+                        }
+                    }
+                    lobby.m_game->set_offline_users(std::move(offline_users));
                     lobby.m_game->tick();
                 }
 

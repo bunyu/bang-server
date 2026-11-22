@@ -22,6 +22,13 @@ namespace banggame {
         ticks get_inactivity_timeout() const override;
         request_state on_inactivity() override;
 
+        // user ids of offline humans (set by the lobby every tick)
+        std::vector<int> m_offline_users;
+        void set_offline_users(std::vector<int> user_ids) override { m_offline_users = std::move(user_ids); }
+        bool is_offline(player_ptr p) const;
+        ticks get_offline_timeout() override;
+        request_state on_offline() override;
+
         game_report get_game_report() const override {
             return m_tracking.get_game_report(this);
         }

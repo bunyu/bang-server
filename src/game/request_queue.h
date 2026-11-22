@@ -76,6 +76,8 @@ namespace banggame {
         request_state m_state;
         // how long the game has been waiting for a human (for the inactivity timer)
         ticks m_idle_ticks{0};
+        // how long the game has been waiting for an offline human
+        ticks m_offline_ticks{0};
 
         request_state invoke_update();
         request_state invoke_tick_update();
@@ -90,6 +92,9 @@ namespace banggame {
         // inactivity timer: 0 = off; on_inactivity() makes a move for whoever the game is waiting for
         virtual ticks get_inactivity_timeout() const { return ticks{0}; }
         virtual request_state on_inactivity() { return request_states::done{}; }
+        // offline players: > 0 while the game waits for an offline human; on_offline() then moves for them
+        virtual ticks get_offline_timeout() { return ticks{0}; }
+        virtual request_state on_offline() { return request_states::done{}; }
 
     public:
         void tick();

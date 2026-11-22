@@ -606,6 +606,44 @@ namespace banggame {
         return request_states::done{};
     }
 
+    bool game::is_offline(player_ptr p) const {
+        return p && !p->is_bot() && p->alive() && rn::contains(m_offline_users, p->user_id);
+    }
+
+    // Waiting for an offline human: the target of the pending request (any offline player if it has no target),
+    // or the player in turn.
+    ticks game::get_offline_timeout() {
+        bool waiting = false;
+        if (auto req = top_request()) {
+            waiting = req->target ? is_offline(req->target) : rn::any_of(m_players, [&](player_ptr p) { return is_offline(p); });
+        } else {
+            waiting = is_offline(m_playing);
+        }
+        if (!waiting) return ticks{0};
+        return std::max(std::chrono::duration_cast<ticks>(m_options.bot_play_timer), ticks{1});
+    }
+
+    // Like on_inactivity, but only for offline players and without a log line (it would repeat every move).
+    request_state game::on_offline() {
+        auto try_play = [&](player_ptr p) -> std::optional<request_state> {
+            if (!is_offline(p)) return std::nullopt;
+            request_state state = request_bot_play(p, true);
+            if (std::holds_alternative<request_states::next>(state)) {
+                return state;
+            }
+            return std::nullopt;
+        };
+        if (auto req = top_request()) {
+            if (auto state = try_play(req->target)) return *state;
+            for (player_ptr p : m_players) {
+                if (auto state = try_play(p)) return *state;
+            }
+        } else if (auto state = try_play(m_playing)) {
+            return *state;
+        }
+        return request_states::done{};
+    }
+
     request_state game::send_request_status_ready() {
         if (!m_playing) {
             return request_states::done{};

@@ -2,6 +2,9 @@
 #define __GAME_H__
 
 #include <map>
+#include <random>
+#include <string>
+#include <vector>
 
 #include "game_table.h"
 #include "game_stats.h"
@@ -33,9 +36,19 @@ namespace banggame {
             return m_tracking.get_game_report(this);
         }
 
-        void tick() override {
-            game_table::tick();
-        }
+        void tick() override;
+
+        // Bot emotes: queued with a short random delay, at most one per bot every few seconds.
+        struct bot_emote {
+            int user_id;
+            std::string message;
+            ticks delay;
+        };
+        std::vector<bot_emote> m_bot_emotes;
+        std::map<int, ticks> m_bot_emote_cooldown;
+        std::minstd_rand m_emote_rng{std::random_device{}()};
+        void queue_bot_emote(player_ptr bot, std::string_view emote, player_ptr target, int percent);
+        void get_bot_chat(consumer_callback<int, std::string_view> callback) override;
         
         void get_pending_updates(std::span<const int> user_ids, consumer_callback<int, update_content> callback) override;
         void get_spectator_join_updates(consumer_callback<update_content> callback) override;

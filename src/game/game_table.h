@@ -61,6 +61,8 @@ namespace banggame {
         game_flags m_game_flags;
 
         player_ptr m_first_player = nullptr;
+        // 1 during the first round (counted when the turn passes to the first player)
+        int m_round_count = 0;
         player_ptr m_playing = nullptr;
 
         game_table(const game_options &options);

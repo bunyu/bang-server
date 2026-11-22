@@ -10,6 +10,9 @@
 
 #include "effects/base/requests.h"
 #include "effects/base/death.h"
+#include "effects/base/damage.h"
+#include "effects/base/bang.h"
+#include "effects/base/heal.h"
 
 #include "play_verify.h"
 #include "possible_to_play.h"
@@ -382,6 +385,29 @@ namespace banggame {
         add_players(user_ids);
         m_tracking.init_tracking(this);
 
+        add_listener<event_type::on_turn_switch>(nullptr, [this](player_ptr origin) {
+            if (origin == m_first_player) {
+                ++m_round_count;
+            }
+        });
+
+        // bots react with emotes, like players do
+        add_listener<event_type::on_hit>(nullptr, [this](card_ptr origin_card, player_ptr origin, player_ptr target, int damage, effect_flags flags) {
+            if (origin && origin != target) queue_bot_emote(target, "angry", origin, 40);
+        });
+        add_listener<event_type::on_missed>(nullptr, [this](card_ptr missed_card, effect_flags flags, shared_request_bang req) {
+            if (req) queue_bot_emote(req->target, "happy", nullptr, 25);
+        });
+        add_listener<event_type::on_heal>(nullptr, [this](card_ptr origin_card, player_ptr origin, player_ptr target, int amount) {
+            if (origin && origin != target) queue_bot_emote(target, m_emote_rng() % 2 ? "beer" : "thumbsup", origin, 40);
+        });
+        add_listener<event_type::on_player_eliminated>(nullptr, [this](player_ptr origin, player_ptr target, death_type type) {
+            if (type == death_type::death) {
+                if (origin && origin != target) queue_bot_emote(origin, m_emote_rng() % 2 ? "laugh" : "trophy", nullptr, 60);
+                queue_bot_emote(target, "skull", nullptr, 50);
+            }
+        });
+
         for (ruleset_ptr ruleset : m_options.expansions) {
             ruleset->on_apply(this);
         }
@@ -604,6 +630,39 @@ namespace banggame {
             return *state;
         }
         return request_states::done{};
+    }
+
+    void game::tick() {
+        game_table::tick();
+        for (bot_emote &emote : m_bot_emotes) {
+            emote.delay -= ticks{1};
+        }
+        for (auto &[user_id, cooldown] : m_bot_emote_cooldown) {
+            if (cooldown > ticks{0}) cooldown -= ticks{1};
+        }
+    }
+
+    void game::queue_bot_emote(player_ptr bot, std::string_view emote, player_ptr target, int percent) {
+        if (!bot || !bot->is_bot()) return;
+        if (static_cast<int>(m_emote_rng() % 100) >= percent) return;
+        ticks &cooldown = m_bot_emote_cooldown[bot->user_id];
+        if (cooldown > ticks{0}) return;
+        cooldown = std::chrono::duration_cast<ticks>(std::chrono::seconds{8});
+        m_bot_emotes.push_back(bot_emote{
+            .user_id = bot->user_id,
+            .message = target && target != bot
+                ? std::format("[[emote:{}@{}]]", emote, target->id)
+                : std::format("[[emote:{}]]", emote),
+            .delay = std::chrono::duration_cast<ticks>(std::chrono::milliseconds{800 + m_emote_rng() % 1200})
+        });
+    }
+
+    void game::get_bot_chat(consumer_callback<int, std::string_view> callback) {
+        std::erase_if(m_bot_emotes, [&](const bot_emote &emote) {
+            if (emote.delay > ticks{0}) return false;
+            callback(emote.user_id, emote.message);
+            return true;
+        });
     }
 
     bool game::is_offline(player_ptr p) const {

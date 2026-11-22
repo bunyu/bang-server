@@ -120,6 +120,14 @@ void game_manager::tick() {
                     lobby.m_game->tick();
                 }
 
+                // bot emotes: sent like a player's, but not kept in the chat history (a rejoin would replay them)
+                lobby.m_game->get_bot_chat([&](int user_id, std::string_view message) {
+                    server_messages::lobby_chat chat{ .user_id = user_id, .message = std::string{message} };
+                    for (const game_user &user : lobby.connected_users()) {
+                        send_message(user.session->client, chat);
+                    }
+                });
+
                 lobby.m_game->get_pending_updates(lobby.connected_user_ids, [&](int user_id, update_content update) {
                     send_message(lobby.find_user(user_id).session->client, server_messages::game_update{ std::move(update) });
                 });

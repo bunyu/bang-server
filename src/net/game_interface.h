@@ -69,6 +69,8 @@ namespace banggame {
         virtual void set_owner_user_id(int user_id) {}
         // users whose connection is gone (or who left the lobby): the bot AI moves for them, every tick
         virtual void set_offline_users(std::vector<int> user_ids) {}
+        // chat messages the bots send (emotes), as (bot user id, message); called after tick()
+        virtual void get_bot_chat(consumer_callback<int, std::string_view> callback) {}
         virtual bool is_game_over() const = 0;
         virtual void get_game_commands(bool enable_cheats, consumer_callback<chat_command> callback) const = 0;
         virtual game_report get_game_report() const = 0;

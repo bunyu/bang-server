@@ -1,5 +1,6 @@
 #include "bot_suggestion.h"
 #include "game_table.h"
+#include "game_options.h"
 
 #include "cards/game_enums.h"
 #include "cards/filter_enums.h"
@@ -47,6 +48,16 @@ namespace banggame::bot_suggestion {
             }
         }
         return true;
+    }
+
+    // Normal and hard outlaw bots hide their role at first: they leave the sheriff alone during the first two rounds,
+    // unless the sheriff is weak (2 hp or less) or this outlaw has already shown itself hostile.
+    static bool is_lying_low(const_player_ptr origin, const_player_ptr target) {
+        return origin->is_outlaw() && target->is_sheriff()
+            && origin->m_game->m_options.bot_difficulty >= 1
+            && origin->m_game->m_round_count <= 2
+            && target->m_hp > 2
+            && !is_negative_karma(origin);
     }
 
     void signal_hostile_action(player_ptr origin, const_player_ptr target, effect_flags flags) {
@@ -163,7 +174,9 @@ namespace banggame::bot_suggestion {
         switch (origin->m_role) {
         case player_role::outlaw:
         case player_role::shadow_outlaw:
-            if (is_role_known(origin, target)) {
+            if (is_lying_low(origin, target)) {
+                return false;
+            } else if (is_role_known(origin, target)) {
                 return target->is_sheriff_or_deputy();
             } else {
                 return is_positive_karma(target);
@@ -276,7 +289,6 @@ namespace banggame::bot_suggestion {
     }
 
     int evaluate_attack(const_player_ptr origin, const_player_ptr target) {
-        // TODO: should prioritize attacking weaker targets better
         const bool lethal = target->m_hp <= 1;
 
         if (target->is_sheriff()) {
@@ -287,8 +299,10 @@ namespace banggame::bot_suggestion {
             }
         }
 
+        // among enemies: a kill first, then the most wounded
         if (is_target_enemy(origin, target, action_type::damage)) {
-            return lethal ? 8 : 7;
+            if (lethal) return 11;
+            return 7 + std::clamp(target->m_max_hp - target->m_hp, 0, 3);
         }
 
         if (is_target_friend(origin, target)) {

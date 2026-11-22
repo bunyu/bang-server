@@ -70,12 +70,18 @@ namespace connection_state {
     };
 
     struct invalid {};
+
+    // the AI helper (ai-bridge), after a valid ai_bridge_hello
+    struct ai_bridge {
+        ticks ping_timer = ticks{0};
+    };
 }
 
 using connection = std::variant<
     connection_state::not_validated,
     connection_state::connected,
-    connection_state::invalid
+    connection_state::invalid,
+    connection_state::ai_bridge
 >;
 
 struct game_user {

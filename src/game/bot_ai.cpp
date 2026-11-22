@@ -191,6 +191,9 @@ namespace banggame {
                     }
                 }
             } else if (origin == origin->m_game->m_playing) {
+                if (is_waiting_ai_advice(origin)) {
+                    return request_states::bot_play{ origin, ticks{6} };
+                }
                 if (!instant && m_options.bot_play_timer > game_duration{0}) {
                     if (!get_all_playable_cards(origin, effect_list_type::effects).empty()) {
                         return request_states::bot_play{ origin, get_total_update_time() + std::chrono::duration_cast<ticks>(m_options.bot_play_timer) };
@@ -215,6 +218,9 @@ namespace banggame {
                     }
                 }
             } else if (m_playing && m_playing->is_bot()) {
+                if (is_waiting_ai_advice(m_playing)) {
+                    return request_states::bot_play{ nullptr, ticks{6} };
+                }
                 playable_cards_list play_cards = generate_playable_cards_list(m_playing, effect_list_type::effects);
                 if (!play_cards.empty() && std::holds_alternative<request_states::next>(execute_best_play(m_playing, play_cards))) {
                     return request_states::next{};

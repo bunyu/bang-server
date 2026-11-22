@@ -1,0 +1,12 @@
+{
+  "name": "bang-ai-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI helper for bang-server: Gemini advice and table talk for bots",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node index.mjs",
+    "test": "node --test"
+  }
+}

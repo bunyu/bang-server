@@ -391,6 +391,10 @@ namespace banggame {
             }
         });
 
+        add_listener<event_type::on_turn_start>(nullptr, [this](player_ptr origin) {
+            request_ai_advice(origin);
+        });
+
         // bots react with emotes, like players do
         add_listener<event_type::on_hit>(nullptr, [this](card_ptr origin_card, player_ptr origin, player_ptr target, int damage, effect_flags flags) {
             if (origin && origin != target) queue_bot_emote(target, "angry", origin, 40);
@@ -640,6 +644,188 @@ namespace banggame {
         for (auto &[user_id, cooldown] : m_bot_emote_cooldown) {
             if (cooldown > ticks{0}) cooldown -= ticks{1};
         }
+        for (auto &[bot, state] : m_ai_bots) {
+            if (state.pending_id != 0 && (state.wait -= ticks{1}) <= ticks{0}) {
+                // no answer in time: play by the rules, a late answer is ignored
+                state.pending_id = 0;
+                ++state.failures;
+            }
+        }
+    }
+
+    // ---------- AI bots ----------
+
+    static constexpr int max_ai_failures = 3;
+    static constexpr size_t max_ai_say_bytes = 480; // 120 characters of Vietnamese can take up to 4 bytes each
+    static constexpr std::string_view ai_emotes[] = {
+        "happy", "angry", "sheriff", "deputy", "outlaw", "renegade", "trophy",
+        "thumbsup", "laugh", "scared", "beer", "handshake", "skull"
+    };
+
+    void game::request_ai_advice(player_ptr bot) {
+        if (!m_options.ai_bots || !m_ai_available || !bot || !bot->is_bot() || !bot->alive()) return;
+        ai_bot_state &state = m_ai_bots[bot];
+        if (state.failures >= max_ai_failures || state.pending_id != 0) return;
+        state.pending_id = m_next_ai_local_id++;
+        state.wait = std::chrono::duration_cast<ticks>(std::chrono::seconds{4});
+        m_ai_outbox.emplace_back(state.pending_id, make_ai_request(bot));
+    }
+
+    bool game::is_waiting_ai_advice(player_ptr bot) const {
+        auto it = m_ai_bots.find(bot);
+        return it != m_ai_bots.end() && it->second.pending_id != 0;
+    }
+
+    void game::get_ai_requests(consumer_callback<int, std::string_view> callback) {
+        for (const auto &[local_id, request] : m_ai_outbox) {
+            callback(local_id, request);
+        }
+        m_ai_outbox.clear();
+    }
+
+    static std::string ai_card_names(const card_list &cards) {
+        std::string ret = "[";
+        for (const_card_ptr c : cards) {
+            if (ret.size() > 1) ret += ',';
+            ret += std::format("\"{}\"", c->name);
+        }
+        return ret + "]";
+    }
+
+    // Only what this bot may know: its own role and hand, the public table, the log lines it was sent.
+    std::string game::make_ai_request(player_ptr bot) const {
+        static constexpr std::string_view languages[] = { "en", "fr", "vi" };
+        std::string players;
+        for (player_ptr p : m_players) {
+            if (!players.empty()) players += ',';
+            card_ptr character = p->get_character();
+            bool role_known = p == bot || p->is_sheriff() || p->check_player_flags(player_flag::role_revealed);
+            players += std::format(
+                "{{\"id\":{},\"user_id\":{},\"character\":\"{}\",\"hp\":{},\"max_hp\":{},\"alive\":{},\"hand_count\":{},\"table\":{}{}}}",
+                p->id, p->user_id, character ? character->name : std::string_view{}, int(p->m_hp), int(p->m_max_hp),
+                p->alive() ? "true" : "false", p->m_hand.size(), ai_card_names(p->m_table),
+                role_known ? std::format(",\"role\":\"{}\"", enums::to_string(p->m_role)) : std::string{});
+        }
+
+        std::vector<std::string_view> log_lines;
+        for (const auto &[target, content] : m_saved_log) {
+            if (target.matches(bot)) log_lines.push_back(content);
+        }
+        if (log_lines.size() > 30) log_lines.erase(log_lines.begin(), log_lines.end() - 30);
+        std::string log;
+        for (std::string_view line : log_lines) {
+            if (!log.empty()) log += ',';
+            log += line;
+        }
+
+        std::string said;
+        if (auto it = m_ai_bots.find(bot); it != m_ai_bots.end()) {
+            for (const std::string &line : it->second.said) {
+                if (!said.empty()) said += ',';
+                said += json::to_string(line);
+            }
+        }
+
+        card_ptr character = bot->get_character();
+        return std::format(
+            "{{\"language\":\"{}\",\"round\":{},\"self\":{{\"id\":{},\"user_id\":{},\"role\":\"{}\",\"character\":\"{}\",\"hp\":{},\"max_hp\":{},\"hand\":{},\"table\":{}}},"
+            "\"players\":[{}],\"log\":[{}],\"said\":[{}]}}",
+            languages[std::clamp(m_options.bot_chat_language, 0, 2)], m_round_count,
+            bot->id, bot->user_id, enums::to_string(bot->m_role), character ? character->name : std::string_view{},
+            int(bot->m_hp), int(bot->m_max_hp), ai_card_names(bot->m_hand), ai_card_names(bot->m_table),
+            players, log, said);
+    }
+
+    static std::optional<player_role> parse_ai_role(const json::json &value) {
+        if (!value.IsString()) return std::nullopt;
+        std::string_view str{ value.GetString(), value.GetStringLength() };
+        if (str == "sheriff") return player_role::sheriff;
+        if (str == "deputy") return player_role::deputy;
+        if (str == "outlaw") return player_role::outlaw;
+        if (str == "renegade") return player_role::renegade;
+        return std::nullopt;
+    }
+
+    static ai_plan parse_ai_plan(const json::json &value) {
+        if (!value.IsString()) return ai_plan::none;
+        std::string_view str{ value.GetString(), value.GetStringLength() };
+        if (str == "lie_low") return ai_plan::lie_low;
+        if (str == "attack_sheriff") return ai_plan::attack_sheriff;
+        if (str == "protect_sheriff") return ai_plan::protect_sheriff;
+        if (str == "hunt_outlaws") return ai_plan::hunt_outlaws;
+        if (str == "survive") return ai_plan::survive;
+        return ai_plan::none;
+    }
+
+    // The helper's answer; every field is checked on its own, anything invalid is ignored.
+    void game::apply_ai_advice(int local_id, const json::json &value) {
+        auto it = rn::find_if(m_ai_bots, [&](const auto &pair) { return pair.second.pending_id == local_id; });
+        if (it == m_ai_bots.end()) return;
+        player_ptr bot = it->first;
+        ai_bot_state &state = it->second;
+        state.pending_id = 0;
+
+        if (!value.IsObject() || value.HasMember("error")) {
+            ++state.failures;
+            return;
+        }
+
+        auto find_player = [&](int id) -> player_ptr {
+            auto p = rn::find(m_players, id, &player::id);
+            return p != m_players.end() ? *p : nullptr;
+        };
+
+        bot_advice advice;
+        if (auto m = value.FindMember("suspects"); m != value.MemberEnd() && m->value.IsObject()) {
+            for (auto &entry : m->value.GetObject()) {
+                int id = 0;
+                std::string_view key{ entry.name.GetString(), entry.name.GetStringLength() };
+                std::from_chars(key.data(), key.data() + key.size(), id);
+                if (player_ptr p = find_player(id); p && p != bot) {
+                    if (auto role = parse_ai_role(entry.value)) {
+                        advice.suspects[id] = *role;
+                    }
+                }
+            }
+        }
+        if (auto m = value.FindMember("plan"); m != value.MemberEnd()) {
+            advice.plan = parse_ai_plan(m->value);
+        }
+        if (auto m = value.FindMember("target_id"); m != value.MemberEnd() && m->value.IsInt()) {
+            if (player_ptr p = find_player(m->value.GetInt()); p && p != bot && p->alive()) {
+                advice.target_id = p->id;
+            }
+        }
+        m_bot_advice[bot] = std::move(advice);
+
+        auto random_delay = [&](int min_ms, int max_ms) {
+            return std::chrono::duration_cast<ticks>(std::chrono::milliseconds{min_ms + int(m_emote_rng() % (max_ms - min_ms))});
+        };
+        if (auto m = value.FindMember("say"); m != value.MemberEnd() && m->value.IsString()) {
+            std::string say{ m->value.GetString(), m->value.GetStringLength() };
+            if (!say.empty() && say.size() <= max_ai_say_bytes && !say.starts_with("[[")) {
+                state.said.push_back(say);
+                if (state.said.size() > 3) state.said.erase(state.said.begin());
+                queue_bot_chat(bot, std::move(say), random_delay(500, 1500));
+            }
+        }
+        if (auto m = value.FindMember("emote"); m != value.MemberEnd() && m->value.IsString()) {
+            std::string_view emote{ m->value.GetString(), m->value.GetStringLength() };
+            if (rn::contains(ai_emotes, emote)) {
+                player_ptr target = nullptr;
+                if (auto t = value.FindMember("emote_target"); t != value.MemberEnd() && t->value.IsInt()) {
+                    target = find_player(t->value.GetInt());
+                }
+                queue_bot_chat(bot, target && target != bot
+                    ? std::format("[[emote:{}@{}]]", emote, target->id)
+                    : std::format("[[emote:{}]]", emote), random_delay(1500, 3000));
+            }
+        }
+    }
+
+    void game::queue_bot_chat(player_ptr bot, std::string message, ticks delay) {
+        m_bot_emotes.push_back(bot_emote{ .user_id = bot->user_id, .message = std::move(message), .delay = delay });
+        m_bot_emote_cooldown[bot->user_id] = std::chrono::duration_cast<ticks>(std::chrono::seconds{8});
     }
 
     void game::queue_bot_emote(player_ptr bot, std::string_view emote, player_ptr target, int percent) {

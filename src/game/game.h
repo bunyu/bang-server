@@ -49,6 +49,26 @@ namespace banggame {
         std::minstd_rand m_emote_rng{std::random_device{}()};
         void queue_bot_emote(player_ptr bot, std::string_view emote, player_ptr target, int percent);
         void get_bot_chat(consumer_callback<int, std::string_view> callback) override;
+
+        // AI bots (ai_bots option): one advice request per bot turn, the bot's first move waits for it (at most 4 s)
+        struct ai_bot_state {
+            int failures = 0;
+            int pending_id = 0;
+            ticks wait{0};
+            std::vector<std::string> said;
+        };
+        bool m_ai_available = false;
+        int m_next_ai_local_id = 1;
+        std::map<player_ptr, ai_bot_state> m_ai_bots;
+        std::vector<std::pair<int, std::string>> m_ai_outbox;
+
+        void set_ai_available(bool value) override { m_ai_available = value; }
+        void get_ai_requests(consumer_callback<int, std::string_view> callback) override;
+        void apply_ai_advice(int local_id, const json::json &advice) override;
+        void request_ai_advice(player_ptr bot);
+        std::string make_ai_request(player_ptr bot) const;
+        bool is_waiting_ai_advice(player_ptr bot) const;
+        void queue_bot_chat(player_ptr bot, std::string message, ticks delay);
         
         void get_pending_updates(std::span<const int> user_ids, consumer_callback<int, update_content> callback) override;
         void get_spectator_join_updates(consumer_callback<update_content> callback) override;

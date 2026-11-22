@@ -24,6 +24,7 @@ namespace banggame {
     DEFINE_TRANSFORMER(character_choice, clamp_value(1, 5))
     DEFINE_TRANSFORMER(bot_difficulty, clamp_value(0, 2))
     DEFINE_TRANSFORMER(owner_role, clamp_value(0, 4))
+    DEFINE_TRANSFORMER(bot_chat_language, clamp_value(0, 2))
     DEFINE_TRANSFORMER(inactivity_timer, clamp_value(game_duration{0}, game_duration{300s}))
     DEFINE_TRANSFORMER(max_players, clamp_value(3, 8))
     DEFINE_TRANSFORMER(auto_resolve_timer, clamp_value(0s, 5s))

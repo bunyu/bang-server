@@ -5,6 +5,7 @@
 #include "wsserver.h"
 #include "logging.h"
 
+#include <map>
 #include <random>
 
 namespace banggame {
@@ -50,6 +51,12 @@ private:
     void handle_message(client_messages::game_rejoin &&msg, session_ptr session);
     void handle_message(client_messages::game_replace_bot &&msg, session_ptr session);
     void handle_message(client_messages::game_action &&msg, session_ptr session);
+    void handle_message(client_messages::ai_bridge_hello &&msg, client_handle client, connection &con);
+    void handle_message(client_messages::ai_advice &&msg, client_handle client, connection &con);
+
+    // the AI helper is connected and identified
+    bool ai_bridge_connected() const;
+    void send_ai_requests(game_lobby &lobby);
     
     void register_chat_commands(game_lobby &lobby);
 
@@ -61,6 +68,11 @@ private:
     client_map m_connections;
 
     message_list m_outgoing_messages;
+
+    // AI helper: its connection, and the requests waiting for an answer (global id -> lobby id, game's local id)
+    client_handle m_ai_bridge;
+    int m_next_ai_request = 1;
+    std::map<int, std::pair<id_type, int>> m_ai_requests;
 
     const server_options &m_options;
 

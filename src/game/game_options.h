@@ -38,6 +38,10 @@ namespace banggame {
         int owner_role = 0;
         // a human player who does nothing for this long has their move made automatically (0 = never)
         game_duration inactivity_timer = 0ms;
+        // bots ask the AI helper (ai-bridge) for advice and table talk, when it is connected
+        bool ai_bots = false;
+        // language of the bots' chat lines: 0 = English, 1 = French, 2 = Vietnamese
+        int bot_chat_language = 0;
 
         static game_options deserialize_json(const json::json &value);
 

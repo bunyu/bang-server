@@ -60,6 +60,7 @@ namespace json {
         std::string m_value;
 
     public:
+        raw_string() = default;
         raw_string(std::string value): m_value(std::move(value)) {}
 
         operator std::string_view() const {

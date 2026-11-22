@@ -52,7 +52,28 @@ namespace banggame::bot_suggestion {
 
     // Normal and hard outlaw bots hide their role at first: they leave the sheriff alone during the first two rounds,
     // unless the sheriff is weak (2 hp or less) or this outlaw has already shown itself hostile.
+    static const bot_advice *get_advice(const_player_ptr origin) {
+        auto it = origin->m_game->m_bot_advice.find(origin);
+        return it != origin->m_game->m_bot_advice.end() ? &it->second : nullptr;
+    }
+
+    // The role the AI suspects for a player whose role this bot doesn't know.
+    static std::optional<player_role> get_suspected_role(const_player_ptr origin, const_player_ptr target) {
+        if (const bot_advice *advice = get_advice(origin)) {
+            if (auto it = advice->suspects.find(target->id); it != advice->suspects.end()) {
+                return it->second;
+            }
+        }
+        return std::nullopt;
+    }
+
     static bool is_lying_low(const_player_ptr origin, const_player_ptr target) {
+        if (const bot_advice *advice = get_advice(origin)) {
+            if (advice->plan == ai_plan::attack_sheriff) return false;
+            if (advice->plan == ai_plan::lie_low) {
+                return origin->is_outlaw() && target->is_sheriff() && target->m_hp > 2;
+            }
+        }
         return origin->is_outlaw() && target->is_sheriff()
             && origin->m_game->m_options.bot_difficulty >= 1
             && origin->m_game->m_round_count <= 2
@@ -178,12 +199,18 @@ namespace banggame::bot_suggestion {
                 return false;
             } else if (is_role_known(origin, target)) {
                 return target->is_sheriff_or_deputy();
+            } else if (auto role = get_suspected_role(origin, target)) {
+                return *role == player_role::sheriff || *role == player_role::deputy;
             } else {
                 return is_positive_karma(target);
             }
         case player_role::sheriff:
             if (is_role_known(origin, target)) {
                 return target->is_outlaw_or_renegade();
+            } else if (auto role = get_suspected_role(origin, target); role == player_role::outlaw) {
+                return true;
+            } else if (role == player_role::deputy) {
+                return false;
             } else if (type == action_type::damage && rn::none_of(origin->m_game->m_players, [](player_ptr p) { return p->in_game() && p->is_outlaw(); })) {
                 // when all targets are deputy or renegade the sheriff will damage everyone until they are 1 hp
                 // "neutral" actions will target neutral or negative players, as per the default
@@ -203,6 +230,8 @@ namespace banggame::bot_suggestion {
         case player_role::shadow_deputy:
             if (is_role_known(origin, target)) {
                 return target->is_outlaw_or_renegade();
+            } else if (auto role = get_suspected_role(origin, target)) {
+                return *role == player_role::outlaw || (*role == player_role::renegade && type != action_type::jail);
             } else if (is_negative_karma(target)) {
                 return true;
             } else if (is_positive_karma(target)) {
@@ -271,6 +300,8 @@ namespace banggame::bot_suggestion {
         case player_role::shadow_outlaw:
             if (is_role_known(origin, target)) {
                 return target->is_outlaw();
+            } else if (auto role = get_suspected_role(origin, target)) {
+                return *role == player_role::outlaw;
             } else {
                 return is_negative_karma(target);
             }
@@ -279,6 +310,8 @@ namespace banggame::bot_suggestion {
         case player_role::shadow_deputy:
             if (is_role_known(origin, target)) {
                 return target->is_sheriff_or_deputy();
+            } else if (auto role = get_suspected_role(origin, target)) {
+                return *role == player_role::deputy || *role == player_role::sheriff;
             } else {
                 return is_positive_karma(target);
             }
@@ -302,7 +335,10 @@ namespace banggame::bot_suggestion {
         // among enemies: a kill first, then the most wounded
         if (is_target_enemy(origin, target, action_type::damage)) {
             if (lethal) return 11;
-            return 7 + std::clamp(target->m_max_hp - target->m_hp, 0, 3);
+            // the AI's preferred target comes first among the wounded-alike
+            const bot_advice *advice = get_advice(origin);
+            const int advised = advice && advice->target_id == target->id ? 3 : 0;
+            return 7 + std::clamp(target->m_max_hp - target->m_hp, 0, 3) + advised;
         }
 
         if (is_target_friend(origin, target)) {

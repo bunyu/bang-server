@@ -7,6 +7,7 @@
 #include "card.h"
 #include "player.h"
 #include "game_net.h"
+#include "bot_advice.h"
 #include "event_map.h"
 #include "disabler_map.h"
 #include "request_queue.h"
@@ -63,6 +64,8 @@ namespace banggame {
         player_ptr m_first_player = nullptr;
         // 1 during the first round (counted when the turn passes to the first player)
         int m_round_count = 0;
+        // AI bots: the latest advice for each bot
+        std::unordered_map<const_player_ptr, bot_advice> m_bot_advice;
         player_ptr m_playing = nullptr;
 
         game_table(const game_options &options);

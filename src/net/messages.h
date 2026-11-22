@@ -74,6 +74,17 @@ namespace banggame {
             struct transparent{};
             json::json_document action;
         };
+
+        // the AI helper (ai-bridge) identifies itself with the server's AI_BRIDGE_TOKEN
+        struct ai_bridge_hello {
+            std::string token;
+        };
+
+        // the AI helper's answer to an ai_advice_request
+        struct ai_advice {
+            int request_id;
+            json::json_document advice;
+        };
     }
     
     using client_message = std::variant<
@@ -91,7 +102,9 @@ namespace banggame {
         client_messages::game_start,
         client_messages::game_rejoin,
         client_messages::game_replace_bot,
-        client_messages::game_action
+        client_messages::game_action,
+        client_messages::ai_bridge_hello,
+        client_messages::ai_advice
     >;
 
     client_message deserialize_message(std::string_view value);
@@ -211,6 +224,12 @@ namespace banggame {
         struct game_started {
             int game_id;
         };
+
+        // to the AI helper: what a bot knows, as JSON ({"names": [...], "game": {...}})
+        struct ai_advice_request {
+            int request_id;
+            json::raw_string request;
+        };
     }
 
     using server_message = std::variant<
@@ -225,7 +244,8 @@ namespace banggame {
         server_messages::lobby_kick,
         server_messages::lobby_chat,
         server_messages::game_update,
-        server_messages::game_started
+        server_messages::game_started,
+        server_messages::ai_advice_request
     >;
     
     std::string serialize_message(const server_message &message);

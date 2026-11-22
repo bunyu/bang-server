@@ -75,6 +75,12 @@ void game_manager::tick() {
                     }
                 }
             },
+            [&](connection_state::ai_bridge &value) {
+                if (!options().disable_pings && ++value.ping_timer > options().ping_interval) {
+                    value.ping_timer = ticks{0};
+                    send_message(client, server_messages::ping{});
+                }
+            },
             [](connection_state::invalid) {}
         }, con);
     }
@@ -117,8 +123,10 @@ void game_manager::tick() {
                         }
                     }
                     lobby.m_game->set_offline_users(std::move(offline_users));
+                    lobby.m_game->set_ai_available(ai_bridge_connected());
                     lobby.m_game->tick();
                 }
+                send_ai_requests(lobby);
 
                 // bot emotes: sent like a player's, but not kept in the chat history (a rejoin would replay them)
                 lobby.m_game->get_bot_chat([&](int user_id, std::string_view message) {
@@ -233,6 +241,8 @@ void game_manager::handle_message(client_messages::connect &&args, client_handle
 void game_manager::handle_message(client_messages::pong &&args, client_handle client, connection &con) {
     if (auto *value = std::get_if<connection_state::connected>(&con)) {
         value->inactivity_timer = ticks{0};
+    } else if (std::holds_alternative<connection_state::ai_bridge>(con)) {
+        // the AI helper answers pings too
     } else {
         throw critical_error("CLIENT_NOT_VALIDATED");
     }
@@ -715,4 +725,73 @@ void game_manager::handle_message(client_messages::game_action &&args, session_p
         lobby.add_chat_message({ 0, "GAME_ERROR", {chat_format_arg::string{e.what()}}, lobby_chat_flag::translated });
         broadcast_lobby_update(lobby);
     }
+}
+
+// ---------- AI helper (ai-bridge) ----------
+
+namespace {
+    struct ai_user_name {
+        int user_id;
+        std::string name;
+    };
+}
+
+void game_manager::handle_message(client_messages::ai_bridge_hello &&args, client_handle client, connection &con) {
+    const char *token = std::getenv("AI_BRIDGE_TOKEN");
+    if (!token || !*token || args.token != token || !std::holds_alternative<connection_state::not_validated>(con)) {
+        throw critical_error("AI_BRIDGE_REFUSED");
+    }
+    if (ai_bridge_connected()) {
+        kick_client(m_ai_bridge, "AI_BRIDGE_REPLACED");
+    }
+    con.emplace<connection_state::ai_bridge>();
+    m_ai_bridge = client;
+    m_ai_requests.clear();
+    logging::info("AI bridge connected");
+}
+
+void game_manager::handle_message(client_messages::ai_advice &&args, client_handle client, connection &con) {
+    if (!std::holds_alternative<connection_state::ai_bridge>(con)) {
+        throw critical_error("NOT_AI_BRIDGE");
+    }
+    auto it = m_ai_requests.find(args.request_id);
+    if (it == m_ai_requests.end()) return;
+    auto [lobby_id, local_id] = it->second;
+    m_ai_requests.erase(it);
+
+    auto lobby_it = m_lobbies.find(lobby_id);
+    if (lobby_it != m_lobbies.end() && lobby_it->second.m_game) {
+        lobby_it->second.m_game->apply_ai_advice(local_id, args.advice);
+    }
+}
+
+bool game_manager::ai_bridge_connected() const {
+    auto it = m_connections.find(m_ai_bridge);
+    return it != m_connections.end() && std::holds_alternative<connection_state::ai_bridge>(it->second);
+}
+
+void game_manager::send_ai_requests(game_lobby &lobby) {
+    if (!lobby.m_game) return;
+    std::string names;
+    lobby.m_game->get_ai_requests([&](int local_id, std::string_view game_json) {
+        if (!ai_bridge_connected()) return;
+        if (names.empty()) {
+            std::vector<ai_user_name> list;
+            for (const game_user &user : lobby.users) {
+                list.push_back({ user.user_id, user.session->username });
+            }
+            for (const lobby_bot &bot : lobby.bots) {
+                list.push_back({ bot.user_id, std::string{bot.make_user_update().username} });
+            }
+            names = json::to_string(list);
+        }
+        // forget requests that were never answered (a game that ended, a helper that restarted)
+        if (m_ai_requests.size() > 1000) m_ai_requests.clear();
+        int request_id = m_next_ai_request++;
+        m_ai_requests.emplace(request_id, std::pair{ lobby.lobby_id, local_id });
+        send_message(m_ai_bridge, server_messages::ai_advice_request{
+            .request_id = request_id,
+            .request = json::raw_string{ std::format("{{\"names\":{},\"game\":{}}}", names, game_json) }
+        });
+    });
 }

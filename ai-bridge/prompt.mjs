@@ -2,6 +2,12 @@
 
 const LANGUAGES = { en: 'English', fr: 'French', vi: 'Vietnamese' };
 
+const LANGUAGE_STYLE = {
+    en: 'Write natural spoken English.',
+    fr: 'Write natural spoken French with all accents (é, è, à, ç...).',
+    vi: 'Write natural spoken Vietnamese with full diacritics (dấu), never without accents.',
+};
+
 const PERSONALITIES = [
     'hot-headed and loud, quick to accuse',
     'sly and quiet, says little but means it',
@@ -82,6 +88,7 @@ Answer with JSON only:
 - plan: one of lie_low, attack_sheriff, protect_sheriff, hunt_outlaws, survive.
 - target_id: the id of the player you most want to attack this turn (an enemy for your role), or omit.
 - say: optional, one short line (max 100 characters) you say out loud at the table, in ${language}, in character.
+  ${LANGUAGE_STYLE[game.language] ?? LANGUAGE_STYLE.en}
   Talk like a player: tease, accuse, bluff, react to what just happened. Do not repeat what you said before.
   Never state your secret role unless it is a deliberate lie. Say nothing about 30% of the time.
 - emote: optional, one of happy, angry, trophy, thumbsup, laugh, scared, beer, handshake, skull; emote_target: optional player id.`;

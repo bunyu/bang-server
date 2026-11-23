@@ -667,7 +667,7 @@ namespace banggame {
         ai_bot_state &state = m_ai_bots[bot];
         if (state.failures >= max_ai_failures || state.pending_id != 0) return;
         state.pending_id = m_next_ai_local_id++;
-        state.wait = std::chrono::duration_cast<ticks>(std::chrono::seconds{4});
+        state.wait = std::chrono::duration_cast<ticks>(std::chrono::seconds{5});
         m_ai_outbox.emplace_back(state.pending_id, make_ai_request(bot));
     }
 
@@ -769,6 +769,8 @@ namespace banggame {
             ++state.failures;
             return;
         }
+        // a bot stops asking after max_ai_failures failures in a row
+        state.failures = 0;
 
         auto find_player = [&](int id) -> player_ptr {
             auto p = rn::find(m_players, id, &player::id);

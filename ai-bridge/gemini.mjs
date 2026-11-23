@@ -17,11 +17,27 @@ export class GeminiError extends Error {
     constructor(message, status) { super(message); this.status = status; }
 }
 
+// "minimal" thinking roughly halves the answer time; a model that rejects the setting gets requests without it
+let thinkingLevel = process.env.GEMINI_THINKING ?? 'minimal';
+
 /**
  * @param {string} prompt
  * @param {{ apiKey: string, model: string, timeoutMs?: number }} options
  */
-export async function askGemini(prompt, { apiKey, model, timeoutMs = 3500 }) {
+export async function askGemini(prompt, options) {
+    try {
+        return await callGemini(prompt, options);
+    } catch (e) {
+        if (e.status === 400 && thinkingLevel) {
+            console.log(`model rejected thinkingLevel=${thinkingLevel}, retrying without it from now on`);
+            thinkingLevel = '';
+            return callGemini(prompt, options);
+        }
+        throw e;
+    }
+}
+
+async function callGemini(prompt, { apiKey, model, timeoutMs = 4700 }) {
     const response = await fetch(`${API}/models/${encodeURIComponent(model)}:generateContent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
@@ -32,6 +48,7 @@ export async function askGemini(prompt, { apiKey, model, timeoutMs = 3500 }) {
                 responseSchema: RESPONSE_SCHEMA,
                 temperature: 0.9,
                 maxOutputTokens: 400,
+                ...(thinkingLevel ? { thinkingConfig: { thinkingLevel } } : {}),
             },
         }),
         signal: AbortSignal.timeout(timeoutMs),

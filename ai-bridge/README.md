@@ -11,7 +11,7 @@ the public table, recent log lines). The helper asks Google Gemini for advice an
 - `emote` / `emote_target`
 
 The bot still makes every move itself; the advice only guides its choices. Every field is validated
-(`validate.mjs`) and the server checks it again. If the helper is missing, slow (> 4 s) or fails, bots play by the rules.
+(`validate.mjs`) and the server checks it again. If the helper is missing, slow (> 5 s) or fails, bots play by the rules; a bot that gets 3 failures in a row stops asking for that game.
 
 ## Environment
 
@@ -21,6 +21,7 @@ The bot still makes every move itself; the advice only guides its choices. Every
 | `AI_BRIDGE_TOKEN` | must equal the game server's `AI_BRIDGE_TOKEN` (the server refuses the bridge without it) |
 | `GEMINI_API_KEY` | the Gemini key, or `GEMINI_API_KEY_FILE` = a file holding it (first line) |
 | `GEMINI_MODEL` | default `gemini-flash-lite-latest`; `node index.mjs --list-models` lists the models the key may use |
+| `GEMINI_THINKING` | default `minimal` (faster answers); empty = the model default |
 | `GEMINI_FAKE=1` | canned advice, no Gemini call (tests) |
 | `AI_BRIDGE_VERBOSE=1` | log every answer |
 

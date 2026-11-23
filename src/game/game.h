@@ -50,7 +50,7 @@ namespace banggame {
         void queue_bot_emote(player_ptr bot, std::string_view emote, player_ptr target, int percent);
         void get_bot_chat(consumer_callback<int, std::string_view> callback) override;
 
-        // AI bots (ai_bots option): one advice request per bot turn, the bot's first move waits for it (at most 4 s)
+        // AI bots (ai_bots option): one advice request per bot turn, the bot's first move waits for it (at most 5 s)
         struct ai_bot_state {
             int failures = 0;
             int pending_id = 0;
